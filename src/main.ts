@@ -12,11 +12,13 @@ const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 const scoreEl = document.getElementById('score')!;
 const enemyEl = document.getElementById('enemy')!;
+const roundEl = document.getElementById('round')!;
 const restartBtn = document.getElementById('restart') as HTMLButtonElement;
 
 let state: State = State.Playing;
 let W = 0, H = 0, DPR = Math.max(1, Math.min(2, devicePixelRatio || 1));
 let keys = new Set<string>();
+let round = 1;
 
 const rand = (a:number,b:number)=>Math.random()*(b-a)+a;
 const clamp = (v:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,v));
@@ -28,6 +30,7 @@ let player: Player; let cpu: Opponent;
 let projs: Projectile[] = []; let powerUps: PowerUp[] = [];
 let popups: {x:number;y:number;text:string;t:number}[] = [];
 let spawnTimer = 0;
+let roundBannerTicks = 0; let roundBannerText = '';
 
 // Touch input (virtual stick)
 let touchId: number | null = null; let touchStart: Vec2 | null = null; let touchDir: Vec2 = {x:0,y:0}; let touchStartTime=0;
@@ -40,12 +43,16 @@ function resize() {
   canvas.style.height = innerHeight + 'px';
 }
 
-function reset() {
+function reset(keepRound=false) {
+  if (!keepRound) round = 1;
   state = State.Playing;
-  player = { x: W*0.25, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#2c7', speed: 2.2*DPR, hits:0, boostTicks:0 };
-  cpu    = { x: W*0.75, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#c33', speed: 2.0*DPR, hits:0, fireCooldown: 90 };
+  const cpuSpeed = (2.0 + 0.3*(round-1)) * DPR;
+  const cpuFire = Math.max(30, 90 - 6*(round-1));
+  const playerSpeed = (3.0 + 0.12*(round-1)) * DPR;
+  player = { x: W*0.25, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#2c7', speed: playerSpeed, hits:0, boostTicks:0 };
+  cpu    = { x: W*0.75, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#c33', speed: cpuSpeed, hits:0, fireCooldown: cpuFire };
   projs.length = 0; powerUps.length = 0; popups.length = 0;
-  spawnTimer = 180; // power-up every ~3s at 60fps
+  spawnTimer = Math.max(120, 240 + Math.floor(Math.random()*180) - 10*(round-1));
   updateHud();
   restartBtn.style.display = 'none';
 }
@@ -53,6 +60,7 @@ function reset() {
 function updateHud(){
   scoreEl.textContent = `You: ${player.hits}`;
   enemyEl.textContent = `CPU: ${cpu.hits}`;
+  roundEl.textContent = `Round: ${round}`;
 }
 
 function fire(from: Entity, owner: 'player'|'cpu', target: Vec2){
@@ -100,7 +108,8 @@ function updateCPU(){
   cpu.fireCooldown--;
   if (cpu.fireCooldown<=0) {
     fire(cpu, 'cpu', {x: player.x, y: player.y});
-    cpu.fireCooldown = 60 + Math.floor(Math.random()*60);
+    const base = Math.max(20, 90 - 6*(round-1));
+    cpu.fireCooldown = Math.max(15, base + Math.floor(Math.random()*30));
   }
 }
 
@@ -110,7 +119,23 @@ function updateProjectiles(){
     if (p.x<-50||p.x>W+50||p.y<-50||p.y>H+50){ projs.splice(i,1); continue; }
     if (p.owner==='player' && dist2(p,cpu) < (p.r+cpu.r)*(p.r+cpu.r)){
       projs.splice(i,1); cpu.hits++; updateHud(); addPopup(cpu.x,cpu.y, Math.random()<0.5? 'Ouch, that\'s well-done!':'Taste the grill!');
-      if (cpu.hits>=5){ state=State.Won; restartBtn.style.display='inline-block'; }
+      if (cpu.hits>=5){
+        round++;
+        // Soft transition: keep gameplay running, just scale difficulty and reset counters
+        player.hits = 0; cpu.hits = 0; updateHud();
+        // Increase difficulty for CPU
+        cpu.speed = (2.0 + 0.3*(round-1)) * DPR;
+        const base = Math.max(20, 90 - 6*(round-1));
+        // Immediate action to avoid lull
+        fire(cpu, 'cpu', {x: player.x, y: player.y});
+        cpu.fireCooldown = Math.max(8, Math.min(20, base - 30));
+        // Ensure next power-up comes soon
+        spawnTimer = Math.min(spawnTimer, 60);
+        player.speed = (3.0 + 0.12*(round-1)) * DPR;
+        // Show banner marker for next board
+        roundBannerText = `Round ${round}`;
+        roundBannerTicks = 120;
+      }
     } else if (p.owner==='cpu' && dist2(p,player) < (p.r+player.r)*(p.r+player.r)){
       projs.splice(i,1); player.hits++; updateHud(); addPopup(player.x,player.y, Math.random()<0.5? 'Spicy hit!':'Charred!');
       if (player.hits>=5){ state=State.Lost; restartBtn.style.display='inline-block'; }
@@ -119,7 +144,7 @@ function updateProjectiles(){
 }
 
 function updatePowerUps(){
-  spawnTimer--; if (spawnTimer<=0){ spawnPower(); spawnTimer = 240 + Math.floor(Math.random()*180); }
+  spawnTimer--; if (spawnTimer<=0){ spawnPower(); spawnTimer = Math.max(120, 240 + Math.floor(Math.random()*180) - 10*(round-1)); }
   for (const pu of powerUps){ if (!pu.alive) continue; if (dist2(pu, player) < (pu.r+player.r)*(pu.r+player.r)) { pu.alive=false; player.boostTicks = Math.max(player.boostTicks, 360); addPopup(player.x, player.y, 'Secret Sauce!'); } }
 }
 
@@ -148,6 +173,27 @@ function draw(){
   // Player and CPU
   drawEntity(player);
   drawEntity(cpu);
+  // Round transition banner (non-blocking)
+  if (roundBannerTicks>0){
+    const alpha = Math.min(1, roundBannerTicks/60);
+    ctx.save();
+    ctx.globalAlpha = 0.85*alpha;
+    const pad = 10*DPR;
+    ctx.fillStyle = '#022';
+    ctx.textAlign = 'center';
+    ctx.font = `${24*DPR}px sans-serif`;
+    const text = roundBannerText || `Round ${round}`;
+    // background pill
+    const metrics = ctx.measureText(text);
+    const tw = metrics.width + pad*2;
+    const th = 34*DPR;
+    const bx = (W - tw)/2, by = 20*DPR;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(bx, by, tw, th);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, W/2, by + th*0.68);
+    ctx.restore();
+  }
   // Popups
   for (const pop of popups){
     pop.t--; if (pop.t<0) continue; const alpha = Math.max(0, pop.t/90);
@@ -173,6 +219,7 @@ function tick(){
     popups = popups.filter(p=>p.t>0);
   }
   draw();
+  if (roundBannerTicks>0) roundBannerTicks--;
   requestAnimationFrame(tick);
 }
 
@@ -199,7 +246,7 @@ canvas.addEventListener('touchend', (ev)=>{
 
 restartBtn.addEventListener('click', ()=> reset());
 
-addEventListener('resize', ()=>{ resize(); reset(); });
+addEventListener('resize', ()=>{ resize(); reset(true); });
 
 // Boot
 resize();
