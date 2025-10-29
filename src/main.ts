@@ -19,6 +19,7 @@ let state: State = State.Playing;
 let W = 0, H = 0, DPR = Math.max(1, Math.min(2, devicePixelRatio || 1));
 let keys = new Set<string>();
 let round = 1;
+const hitsToClear = ()=> Math.min(15, 7 + Math.floor((round-1)/2));
 
 const rand = (a:number,b:number)=>Math.random()*(b-a)+a;
 const clamp = (v:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,v));
@@ -31,6 +32,7 @@ let projs: Projectile[] = []; let powerUps: PowerUp[] = [];
 let popups: {x:number;y:number;text:string;t:number}[] = [];
 let spawnTimer = 0;
 let roundBannerTicks = 0; let roundBannerText = '';
+let obstacles: Entity[] = [];
 
 // Touch input (virtual stick)
 let touchId: number | null = null; let touchStart: Vec2 | null = null; let touchDir: Vec2 = {x:0,y:0}; let touchStartTime=0;
@@ -48,18 +50,20 @@ function reset(keepRound=false) {
   state = State.Playing;
   const cpuSpeed = (2.0 + 0.3*(round-1)) * DPR;
   const cpuFire = Math.max(30, 90 - 6*(round-1));
-  const playerSpeed = (3.0 + 0.12*(round-1)) * DPR;
+  const playerSpeed = (3.0 + 0.12*(round-1) + 0.06*Math.max(0, round-10)) * DPR;
   player = { x: W*0.25, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#2c7', speed: playerSpeed, hits:0, boostTicks:0 };
   cpu    = { x: W*0.75, y: H*0.5, r: 16*DPR, vx:0, vy:0, color:'#c33', speed: cpuSpeed, hits:0, fireCooldown: cpuFire };
-  projs.length = 0; powerUps.length = 0; popups.length = 0;
+  projs.length = 0; powerUps.length = 0; popups.length = 0; obstacles.length = 0;
+  generateObstacles();
   spawnTimer = Math.max(120, 240 + Math.floor(Math.random()*180) - 10*(round-1));
   updateHud();
   restartBtn.style.display = 'none';
 }
 
 function updateHud(){
-  scoreEl.textContent = `You: ${player.hits}`;
-  enemyEl.textContent = `CPU: ${cpu.hits}`;
+  const need = hitsToClear();
+  scoreEl.textContent = `You: ${player.hits}/${need}`;
+  enemyEl.textContent = `CPU: ${cpu.hits}/${need}`;
   roundEl.textContent = `Round: ${round}`;
 }
 
@@ -97,6 +101,7 @@ function updatePlayer(){
   player.x = clamp(player.x + player.vx, player.r, W - player.r);
   player.y = clamp(player.y + player.vy, player.r, H - player.r);
   if (player.boostTicks>0) player.boostTicks--;
+  resolveEntityObstacles(player);
 }
 
 function updateCPU(){
@@ -105,6 +110,7 @@ function updateCPU(){
   cpu.vx = toP.x * cpu.speed; cpu.vy = toP.y * cpu.speed;
   cpu.x = clamp(cpu.x + cpu.vx, cpu.r, W - cpu.r);
   cpu.y = clamp(cpu.y + cpu.vy, cpu.r, H - cpu.r);
+  resolveEntityObstacles(cpu);
   cpu.fireCooldown--;
   if (cpu.fireCooldown<=0) {
     fire(cpu, 'cpu', {x: player.x, y: player.y});
@@ -117,9 +123,13 @@ function updateProjectiles(){
   for (let i=projs.length-1;i>=0;i--){
     const p=projs[i]; p.x+=p.vx; p.y+=p.vy;
     if (p.x<-50||p.x>W+50||p.y<-50||p.y>H+50){ projs.splice(i,1); continue; }
+    // Projectile vs obstacles
+    let hitObstacle = false;
+    for (const ob of obstacles){ if (dist2(p, ob) < (p.r+ob.r)*(p.r+ob.r)) { hitObstacle = true; break; } }
+    if (hitObstacle){ projs.splice(i,1); continue; }
     if (p.owner==='player' && dist2(p,cpu) < (p.r+cpu.r)*(p.r+cpu.r)){
       projs.splice(i,1); cpu.hits++; updateHud(); addPopup(cpu.x,cpu.y, Math.random()<0.5? 'Ouch, that\'s well-done!':'Taste the grill!');
-      if (cpu.hits>=5){
+      if (cpu.hits>=hitsToClear()){
         round++;
         // Soft transition: keep gameplay running, just scale difficulty and reset counters
         player.hits = 0; cpu.hits = 0; updateHud();
@@ -131,14 +141,16 @@ function updateProjectiles(){
         cpu.fireCooldown = Math.max(8, Math.min(20, base - 30));
         // Ensure next power-up comes soon
         spawnTimer = Math.min(spawnTimer, 60);
-        player.speed = (3.0 + 0.12*(round-1)) * DPR;
+        player.speed = (3.0 + 0.12*(round-1) + 0.06*Math.max(0, round-10)) * DPR;
+        // Regenerate obstacles for new round
+        obstacles.length = 0; generateObstacles();
         // Show banner marker for next board
         roundBannerText = `Round ${round}`;
         roundBannerTicks = 120;
       }
     } else if (p.owner==='cpu' && dist2(p,player) < (p.r+player.r)*(p.r+player.r)){
       projs.splice(i,1); player.hits++; updateHud(); addPopup(player.x,player.y, Math.random()<0.5? 'Spicy hit!':'Charred!');
-      if (player.hits>=5){ state=State.Lost; restartBtn.style.display='inline-block'; }
+      if (player.hits>=hitsToClear()){ state=State.Lost; restartBtn.style.display='inline-block'; }
     }
   }
 }
@@ -170,6 +182,12 @@ function draw(){
   for (const pu of powerUps){ if (!pu.alive) continue; ctx.fillStyle = '#f90'; ctx.beginPath(); ctx.arc(pu.x,pu.y,pu.r,0,Math.PI*2); ctx.fill(); }
   // Projectiles as red/gray circles
   for (const p of projs){ drawEntity(p); }
+  // Obstacles as squares (visual)
+  for (const ob of obstacles){
+    ctx.fillStyle = '#666';
+    const size = ob.r * 2;
+    ctx.fillRect(ob.x - ob.r, ob.y - ob.r, size, size);
+  }
   // Player and CPU
   drawEntity(player);
   drawEntity(cpu);
@@ -214,7 +232,10 @@ function draw(){
 function tick(){
   handleInput();
   if (state===State.Playing){
-    updatePlayer(); updateCPU(); updateProjectiles(); updatePowerUps();
+    updatePlayer(); updateCPU();
+    // Ensure player and CPU never overlap (high rounds)
+    separateEntities(player, cpu);
+    updateProjectiles(); updatePowerUps();
     // trim old popups
     popups = popups.filter(p=>p.t>0);
   }
@@ -252,3 +273,55 @@ addEventListener('resize', ()=>{ resize(); reset(true); });
 resize();
 reset();
 requestAnimationFrame(tick);
+
+// --- Obstacles helpers ---
+function separateEntities(a: Entity, b: Entity){
+  const dx = a.x - b.x, dy = a.y - b.y; const d = Math.hypot(dx,dy);
+  const minD = a.r + b.r;
+  if (d === 0){
+    // Arbitrary small nudge apart if perfectly overlapped
+    const n = 0.5*DPR; a.x += n; b.x -= n; return;
+  }
+  if (d < minD){
+    const overlap = (minD - d) + 0.5*DPR;
+    const nx = dx / d, ny = dy / d;
+    // Split the push between both entities
+    const pushA = overlap * 0.5; const pushB = overlap * 0.5;
+    a.x = clamp(a.x + nx*pushA, a.r, W - a.r);
+    a.y = clamp(a.y + ny*pushA, a.r, H - a.r);
+    b.x = clamp(b.x - nx*pushB, b.r, W - b.r);
+    b.y = clamp(b.y - ny*pushB, b.r, H - b.r);
+  }
+}
+function generateObstacles(){
+  const count = Math.min(12, 2 + Math.floor((round-1)/2));
+  const margin = 36*DPR;
+  const radii = [14,16,18,20].map(n=>n*DPR);
+  let tries = 0;
+  while (obstacles.length < count && tries < 500){
+    tries++;
+    const r = radii[Math.floor(Math.random()*radii.length)];
+    const x = rand(margin, W - margin);
+    const y = rand(margin, H - margin);
+    const candidate: Entity = { x, y, r, vx:0, vy:0, color:'#666' } as Entity;
+    // Avoid overlapping players, cpu, and other obstacles
+    if (dist2(candidate, player) < (candidate.r + player.r + 40*DPR)**2) continue;
+    if (dist2(candidate, cpu)    < (candidate.r + cpu.r    + 40*DPR)**2) continue;
+    let ok = true;
+    for (const o of obstacles){ if (dist2(candidate, o) < (candidate.r + o.r + 20*DPR)**2) { ok = false; break; } }
+    if (!ok) continue;
+    obstacles.push(candidate);
+  }
+}
+
+function resolveEntityObstacles(e: Entity){
+  for (const ob of obstacles){
+    const dx = e.x - ob.x, dy = e.y - ob.y; const d = Math.hypot(dx,dy) || 1;
+    const minD = e.r + ob.r;
+    if (d < minD){
+      const nx = dx / d, ny = dy / d; const push = (minD - d) + 0.5*DPR;
+      e.x = clamp(e.x + nx*push, e.r, W - e.r);
+      e.y = clamp(e.y + ny*push, e.r, H - e.r);
+    }
+  }
+}
