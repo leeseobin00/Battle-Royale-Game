@@ -6,7 +6,7 @@ interface Opponent extends Entity { speed: number; hits: number; fireCooldown: n
 interface Projectile extends Entity { owner: 'player'|'cpu' }
 interface PowerUp extends Entity { kind: 'sauce'; alive: boolean }
 
-enum State { Playing, Won, Lost }
+enum State { Playing, Won, Lost, TimeUp }
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -14,6 +14,7 @@ const scoreEl = document.getElementById('score')!;
 const enemyEl = document.getElementById('enemy')!;
 const roundEl = document.getElementById('round')!;
 const restartBtn = document.getElementById('restart') as HTMLButtonElement;
+const timerEl = document.getElementById('timer')!;
 
 let state: State = State.Playing;
 let W = 0, H = 0, DPR = Math.max(1, Math.min(2, devicePixelRatio || 1));
@@ -33,6 +34,8 @@ let popups: {x:number;y:number;text:string;t:number}[] = [];
 let spawnTimer = 0;
 let roundBannerTicks = 0; let roundBannerText = '';
 let obstacles: Entity[] = [];
+let timerMsRemaining = 60000; // 60 seconds
+let lastTickMs = performance.now();
 
 // Touch input (virtual stick)
 let touchId: number | null = null; let touchStart: Vec2 | null = null; let touchDir: Vec2 = {x:0,y:0}; let touchStartTime=0;
@@ -56,6 +59,7 @@ function reset(keepRound=false) {
   projs.length = 0; powerUps.length = 0; popups.length = 0; obstacles.length = 0;
   generateObstacles();
   spawnTimer = Math.max(120, 240 + Math.floor(Math.random()*180) - 10*(round-1));
+  timerMsRemaining = 60000; lastTickMs = performance.now();
   updateHud();
   restartBtn.style.display = 'none';
 }
@@ -65,6 +69,10 @@ function updateHud(){
   scoreEl.textContent = `You: ${player.hits}/${need}`;
   enemyEl.textContent = `CPU: ${cpu.hits}/${need}`;
   roundEl.textContent = `Round: ${round}`;
+  const sec = Math.max(0, Math.ceil(timerMsRemaining/1000));
+  const mm = Math.floor(sec/60).toString().padStart(2,'0');
+  const ss = (sec%60).toString().padStart(2,'0');
+  timerEl.textContent = `${mm}:${ss}`;
 }
 
 function fire(from: Entity, owner: 'player'|'cpu', target: Vec2){
@@ -223,15 +231,28 @@ function draw(){
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
     ctx.font = `${28*DPR}px sans-serif`;
-    ctx.fillText(state===State.Won? 'You Win the Backyard BBQ!' : 'CPU Served You!', W/2, H/2 - 20*DPR);
+    const title = state===State.Won? 'You Win the Backyard BBQ!' : state===State.Lost? 'CPU Served You!' : "Time's Up!";
+    ctx.fillText(title, W/2, H/2 - 30*DPR);
+    if (state===State.TimeUp){
+      ctx.font = `${18*DPR}px sans-serif`;
+      const need = hitsToClear();
+      ctx.fillText(`Final Score — You: ${player.hits}/${need}  |  CPU: ${cpu.hits}/${need}`, W/2, H/2 + 0*DPR);
+    }
     ctx.font = `${18*DPR}px sans-serif`;
     ctx.fillText('Tap or click Restart', W/2, H/2 + 10*DPR);
   }
 }
 
 function tick(){
+  const now = performance.now();
+  const dt = now - lastTickMs; lastTickMs = now;
   handleInput();
   if (state===State.Playing){
+    // Timer countdown
+    timerMsRemaining -= dt;
+    if (timerMsRemaining <= 0){
+      timerMsRemaining = 0; updateHud(); state = State.TimeUp; restartBtn.style.display='inline-block';
+    }
     updatePlayer(); updateCPU();
     // Ensure player and CPU never overlap (high rounds)
     separateEntities(player, cpu);
@@ -240,6 +261,7 @@ function tick(){
     popups = popups.filter(p=>p.t>0);
   }
   draw();
+  if (state===State.Playing) updateHud();
   if (roundBannerTicks>0) roundBannerTicks--;
   requestAnimationFrame(tick);
 }

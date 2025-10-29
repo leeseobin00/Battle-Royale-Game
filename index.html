@@ -1,8 +1,11 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <title>Backyard BBQ Battle Royale</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -14,8 +17,12 @@
         <span id="enemy">CPU: 0</span>
         <span id="vs2"> | </span>
         <span id="round">Round: 1</span>
+        <span id="vs3"> | </span>
+        <span id="timer">01:00</span>
       </div>
-      <button id="restart" style="display:none">Restart</button>
+      <div style="pointer-events: auto; display: flex; gap: 8px">
+        <button id="restart" style="display: none">Restart</button>
+      </div>
     </div>
     <canvas id="game"></canvas>
     <script type="module" src="/src/main.ts"></script>
