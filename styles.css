@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { 
+  background: linear-gradient(135deg, rgba(10,30,70,0.15), rgba(200,0,0,0.08)) fixed;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+#game { 
+  width: 100vw; height: 100vh; display: block; touch-action: none; 
+}
+#ui { position: fixed; top: env(safe-area-inset-top, 12px); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }
+#hud { background: rgba(255,255,255,0.7); padding: 6px 10px; border-radius: 8px; font-weight: 600; color: #062;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+#restart { pointer-events: auto; padding: 8px 12px; border-radius: 8px; border: 0; background: #0a6; color: white; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+#restart:active { transform: translateY(1px); }
