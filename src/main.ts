@@ -136,7 +136,7 @@ function updateProjectiles(){
     for (const ob of obstacles){ if (dist2(p, ob) < (p.r+ob.r)*(p.r+ob.r)) { hitObstacle = true; break; } }
     if (hitObstacle){ projs.splice(i,1); continue; }
     if (p.owner==='player' && dist2(p,cpu) < (p.r+cpu.r)*(p.r+cpu.r)){
-      projs.splice(i,1); cpu.hits++; updateHud(); addPopup(cpu.x,cpu.y, Math.random()<0.5? 'Ouch, that\'s well-done!':'Taste the grill!');
+      projs.splice(i,1); cpu.hits++; updateHud();
       if (cpu.hits>=hitsToClear()){
         round++;
         // Soft transition: keep gameplay running, just scale difficulty and reset counters
@@ -157,7 +157,7 @@ function updateProjectiles(){
         roundBannerTicks = 120;
       }
     } else if (p.owner==='cpu' && dist2(p,player) < (p.r+player.r)*(p.r+player.r)){
-      projs.splice(i,1); player.hits++; updateHud(); addPopup(player.x,player.y, Math.random()<0.5? 'Spicy hit!':'Charred!');
+      projs.splice(i,1); player.hits++; updateHud();
       if (player.hits>=hitsToClear()){ state=State.Lost; restartBtn.style.display='inline-block'; }
     }
   }
@@ -165,7 +165,7 @@ function updateProjectiles(){
 
 function updatePowerUps(){
   spawnTimer--; if (spawnTimer<=0){ spawnPower(); spawnTimer = Math.max(120, 240 + Math.floor(Math.random()*180) - 10*(round-1)); }
-  for (const pu of powerUps){ if (!pu.alive) continue; if (dist2(pu, player) < (pu.r+player.r)*(pu.r+player.r)) { pu.alive=false; player.boostTicks = Math.max(player.boostTicks, 360); addPopup(player.x, player.y, 'Secret Sauce!'); } }
+  for (const pu of powerUps){ if (!pu.alive) continue; if (dist2(pu, player) < (pu.r+player.r)*(pu.r+player.r)) { pu.alive=false; player.boostTicks = Math.max(player.boostTicks, 360); } }
 }
 
 function drawBackground(){
