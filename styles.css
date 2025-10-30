@@ -13,3 +13,14 @@ body {
 }
 #restart { pointer-events: auto; padding: 8px 12px; border-radius: 8px; border: 0; background: #0a6; color: white; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
 #restart:active { transform: translateY(1px); }
+
+/* End-of-game Modal */
+#end-modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; }
+#end-modal[aria-hidden="false"] { display: flex !important; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
+.modal-panel { position: relative; z-index: 1; width: min(92vw, 420px); background: #fff; color: #022; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 20px; text-align: center; }
+.modal-panel h2 { margin: 0 0 8px; font-size: 22px; }
+.modal-panel p { margin: 4px 0 16px; font-weight: 600; color: #064; }
+.modal-actions { display: flex; gap: 8px; justify-content: center; }
+.modal-actions button { padding: 10px 14px; border-radius: 10px; border: 0; background: #0a6; color: #fff; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.modal-actions button:active { transform: translateY(1px); }

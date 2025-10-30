@@ -15,6 +15,10 @@ const enemyEl = document.getElementById('enemy')!;
 const roundEl = document.getElementById('round')!;
 const restartBtn = document.getElementById('restart') as HTMLButtonElement;
 const timerEl = document.getElementById('timer')!;
+const endModal = document.getElementById('end-modal') as HTMLElement | null;
+const endTitle = document.getElementById('end-title') as HTMLElement | null;
+const endScore = document.getElementById('end-score') as HTMLElement | null;
+const modalRestart = document.getElementById('modal-restart') as HTMLButtonElement | null;
 
 let state: State = State.Playing;
 let W = 0, H = 0, DPR = Math.max(1, Math.min(2, devicePixelRatio || 1));
@@ -62,6 +66,7 @@ function reset(keepRound=false) {
   timerMsRemaining = 60000; lastTickMs = performance.now();
   updateHud();
   restartBtn.style.display = 'none';
+  if (endModal) { endModal.setAttribute('aria-hidden','true'); endModal.style.display = 'none'; }
 }
 
 function updateHud(){
@@ -158,7 +163,10 @@ function updateProjectiles(){
       }
     } else if (p.owner==='cpu' && dist2(p,player) < (p.r+player.r)*(p.r+player.r)){
       projs.splice(i,1); player.hits++; updateHud();
-      if (player.hits>=hitsToClear()){ state=State.Lost; restartBtn.style.display='inline-block'; }
+      if (player.hits>=hitsToClear()){ 
+        state=State.Lost; 
+        showEndModal('CPU Served You!');
+      }
     }
   }
 }
@@ -226,8 +234,9 @@ function draw(){
     ctx.globalAlpha = alpha; ctx.fillStyle = '#022'; ctx.font = `${16*DPR}px sans-serif`; ctx.fillText(pop.text, pop.x+10*DPR, pop.y-10*DPR - (90-pop.t)*0.2);
     ctx.globalAlpha = 1;
   }
-  // On-screen hint
-  if (state!==State.Playing){
+  // On-screen hint (hidden when modal is visible)
+  const modalVisible = endModal && endModal.getAttribute('aria-hidden')==='false';
+  if (state!==State.Playing && !modalVisible){
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
     ctx.font = `${28*DPR}px sans-serif`;
@@ -251,7 +260,7 @@ function tick(){
     // Timer countdown
     timerMsRemaining -= dt;
     if (timerMsRemaining <= 0){
-      timerMsRemaining = 0; updateHud(); state = State.TimeUp; restartBtn.style.display='inline-block';
+      timerMsRemaining = 0; updateHud(); state = State.TimeUp; showEndModal("Time's Up!");
     }
     updatePlayer(); updateCPU();
     // Ensure player and CPU never overlap (high rounds)
@@ -288,6 +297,20 @@ canvas.addEventListener('touchend', (ev)=>{
 },{passive:true});
 
 restartBtn.addEventListener('click', ()=> reset());
+
+// Modal wire-up
+if (modalRestart){ modalRestart.addEventListener('click', ()=> reset()); }
+
+function showEndModal(title: string){
+  if (!endModal || !endScore || !endTitle) { restartBtn.style.display='inline-block'; return; }
+  const need = hitsToClear();
+  const scoreText = `Final Score — Round ${round} — You: ${player.hits}/${need}  |  CPU: ${cpu.hits}/${need}`;
+  endTitle.textContent = title;
+  endScore.textContent = scoreText;
+  endModal.setAttribute('aria-hidden','false');
+  endModal.style.display = 'flex';
+  restartBtn.style.display = 'none';
+}
 
 addEventListener('resize', ()=>{ resize(); reset(true); });
 

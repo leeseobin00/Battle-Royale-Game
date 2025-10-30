@@ -24,6 +24,17 @@
         <button id="restart" style="display: none">Restart</button>
       </div>
     </div>
+    <!-- End-of-game Modal -->
+    <div id="end-modal" aria-hidden="true" style="display:none">
+      <div class="modal-backdrop"></div>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="end-title">
+        <h2 id="end-title">Game Over</h2>
+        <p id="end-score">Final Score</p>
+        <div class="modal-actions">
+          <button id="modal-restart">Restart</button>
+        </div>
+      </div>
+    </div>
     <canvas id="game"></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
